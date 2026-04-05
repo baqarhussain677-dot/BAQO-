@@ -1,0 +1,1 @@
+A full-stack AI Chatbot application featuring a modern HTML/CSS frontend and a robust C# (ASP.NET) backend. This project demonstrates how to connect a user interface with a server-side API to handle intelligent conversations.
