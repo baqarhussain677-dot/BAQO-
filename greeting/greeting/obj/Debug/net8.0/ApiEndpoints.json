@@ -1,0 +1,18 @@
+[
+  {
+    "ContainingType": "greeting.Controllers.GreetingController",
+    "Method": "GetAnswer",
+    "RelativePath": "api/Greeting/getanswer",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "message",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  }
+]

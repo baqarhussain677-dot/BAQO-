@@ -1,0 +1,31 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "greeting",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/Greeting/getanswer": {
+      "get": {
+        "tags": [
+          "Greeting"
+        ],
+        "parameters": [
+          {
+            "name": "message",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": { }
+}

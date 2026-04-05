@@ -1,0 +1,23 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "greeting\\greeting.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "..\\Maths\\Maths\\Maths.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "..\\math quiz game\\math quiz game\\math quiz game.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "..\\Summarize\\Summarize\\Summarize.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

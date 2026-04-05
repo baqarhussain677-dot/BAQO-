@@ -1,0 +1,730 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BAQO Security System - Face ID</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --primary: #0ff;        /* Cyan */
+            --secondary: #f0f;      /* Pink */
+            --bg-color: #050505;
+            --text-color: #fff;
+            --glass: rgba(10, 15, 20, 0.7);
+            --matrix-trail: rgba(0, 0, 0, 0.05);
+            --matrix-text: #0ff;
+            --scanline: rgba(255, 255, 255, 0.05);
+        }
+
+        body.light-mode {
+            --primary: #007777; --secondary: #aa00aa; --bg-color: #e0e5ec;
+            --text-color: #111; --glass: rgba(255, 255, 255, 0.6);
+            --matrix-trail: rgba(240, 240, 240, 0.1); --matrix-text: #005555;
+            --scanline: rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            margin: 0; padding: 0; font-family: 'Rajdhani', sans-serif;
+            height: 100vh; overflow: hidden; background: var(--bg-color);
+            color: var(--text-color); transition: background 0.5s, color 0.5s;
+            cursor: none; 
+        }
+
+        /* --- BACKGROUNDS --- */
+        #bg-video {
+            position: fixed; right: 0; bottom: 0; min-width: 100%; min-height: 100%;
+            z-index: -10; object-fit: cover; opacity: 1; transition: opacity 0.5s;
+        }
+        body.light-mode #bg-video { opacity: 1; filter: invert(1); } 
+
+        canvas#matrix-bg {
+            display: block; position: fixed; top: 0; left: 0; z-index: -9; opacity: 0.25; 
+            mix-blend-mode: screen; 
+        }
+        body.light-mode canvas#matrix-bg { mix-blend-mode: multiply; opacity: 0.6; }
+
+        body::before {
+            content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px; pointer-events: none; z-index: -4;
+        }
+        body::after {
+            content: " "; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(var(--scanline) 50%, transparent 50%);
+            background-size: 100% 4px; pointer-events: none; z-index: 9998; opacity: 0.4;
+        }
+
+        /* --- CUSTOM CURSOR PLEASE PASS ME --- */
+        #cursor {
+            position: fixed; top: 0; left: 0; width: 20px; height: 20px;
+            border: 1px solid var(--primary); border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none; z-index: 10000;
+            transition: width 0.2s, height 0.2s, background 0.2s; box-shadow: 0 0 10px var(--primary);
+        }
+        #cursor::after {
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 4px; height: 4px; background: var(--secondary); border-radius: 50%;
+        }
+        body.hovering #cursor { width: 50px; height: 50px; background: rgba(0, 255, 255, 0.1); border-color: var(--secondary); box-shadow: 0 0 20px var(--secondary); }
+
+        /* --- 🔒 LOGIN SCREEN KIA MAIN PASS HOJAONGA --- */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5000; display: flex; justify-content: center; align-items: center;
+            flex-direction: column; transition: all 0.8s ease-in-out;
+        }
+
+        #security-video {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: -2; opacity: 1;
+        }
+        .security-tint {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: -1; backdrop-filter: blur(5px);
+        }
+
+        .login-box {
+            width: 350px; padding: 40px;
+            background: rgba(10, 15, 20, 0.6); border: 2px solid var(--primary);
+            border-radius: 10px; text-align: center;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            position: relative; overflow: hidden; z-index: 5; 
+            transition: opacity 0.5s;
+        }
+        .login-box::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            animation: scanLogin 2s infinite;
+        }
+        @keyframes scanLogin { 0% { left: -100%; } 100% { left: 100%; } }
+
+        .login-title {
+            font-size: 2rem; color: #fff; margin-bottom: 30px; letter-spacing: 2px;
+            text-shadow: 0 0 10px var(--primary);
+        }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        .input-group label { display: block; color: var(--primary); font-size: 0.8rem; margin-bottom: 5px; font-family: 'Share Tech Mono'; }
+        .login-input {
+            width: 100%; padding: 10px; background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.3); color: #fff; outline: none;
+            font-family: 'Share Tech Mono'; letter-spacing: 1px; transition: 0.3s;
+        }
+        .login-input:focus { border-color: var(--primary); box-shadow: 0 0 10px var(--primary); }
+        
+        .login-btn {
+            width: 100%; padding: 12px; background: var(--primary); color: #000;
+            border: none; font-weight: bold; cursor: pointer; letter-spacing: 2px;
+            font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; transition: 0.3s;
+            clip-path: polygon(0 0, 100% 0, 100% 70%, 90% 100%, 0 100%);
+        }
+        .login-btn:hover { background: var(--secondary); color: #fff; box-shadow: 0 0 20px var(--secondary); }
+        .error-msg { color: #ff3333; font-size: 0.9rem; margin-top: 10px; min-height: 20px; text-shadow: 0 0 5px red; }
+
+        /* --- 👽 FACE RECOGNITION STYLE  SHAMPI KA FACE HOGA YAHA--- */
+        #face-id-container {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 400px; height: 500px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.3);
+            z-index: 6000; display: none; /* Hidden Initially */
+            flex-direction: column; align-items: center; padding: 20px;
+            backdrop-filter: blur(10px);
+            clip-path: polygon(10% 0, 100% 0, 100% 90%, 90% 100%, 0 100%, 0 10%);
+        }
+
+        #face-video {
+            width: 100%; height: 300px;
+            background: #000; border: 1px solid var(--secondary);
+            object-fit: cover; transform: scaleX(-1); /* Mirror effect */
+            filter: grayscale(100%) contrast(1.2) brightness(0.8); /* Security camera look */
+        }
+
+        .scan-overlay {
+            position: absolute; top: 20px; left: 20px; width: 360px; height: 300px;
+            border: 2px dashed rgba(0, 255, 255, 0.3);
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .scan-bar {
+            width: 100%; height: 4px;
+            background: var(--primary);
+            box-shadow: 0 0 20px var(--primary);
+            position: absolute; top: 0;
+            animation: scanFace 2s linear infinite;
+        }
+
+        @keyframes scanFace { 0% { top: 0%; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+
+        .face-status {
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--primary); margin-top: 20px; font-size: 1.2rem;
+            text-transform: uppercase; letter-spacing: 2px;
+            text-align: center;
+        }
+        
+        .face-grid {
+            position: absolute; top: 20px; left: 20px; width: 360px; height: 300px;
+            background-image: 
+                linear-gradient(var(--primary) 1px, transparent 1px),
+                linear-gradient(90deg, var(--primary) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: center;
+            opacity: 0.2; pointer-events: none;
+        }
+
+        /* --- MAIN UI (Hidden) inshallah hoga na yar--- */
+        #main-interface { opacity: 0; pointer-events: none; transition: opacity 1.5s ease; }
+        #main-interface.unlocked { opacity: 1; pointer-events: all; }
+
+        .theme-btn { position: fixed; top: 30px; left: 40px; background: var(--glass); border: 2px solid var(--primary); color: var(--primary); width: 50px; height: 50px; border-radius: 50%; cursor: pointer; z-index: 1001; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; box-shadow: 0 0 15px var(--primary); transition: 0.3s; }
+        .theme-btn:hover { transform: scale(1.1) rotate(180deg); background: var(--primary); color: var(--bg-color); }
+        .system-clock { position: fixed; top: 30px; right: 50px; text-align: right; font-family: 'Share Tech Mono', monospace; z-index: 10; animation: fadeIn 2s ease-out; }
+        .time-display { font-size: 4rem; color: var(--text-color); text-shadow: 0 0 20px var(--primary); line-height: 1; letter-spacing: 2px; }
+        .date-display { font-size: 1.2rem; color: var(--primary); letter-spacing: 4px; margin-top: 5px; opacity: 0.8; text-shadow: 0 0 10px var(--primary); background: rgba(0, 255, 255, 0.1); padding: 2px 10px; display: inline-block; border: 1px solid var(--primary); }
+        .holo-panel { position: fixed; top: 50%; right: 40px; transform: translateY(-50%); width: 200px; text-align: right; z-index: 5; font-family: 'Share Tech Mono', monospace; color: var(--primary); opacity: 0.8; pointer-events: none; }
+        .data-row { margin-bottom: 15px; font-size: 0.85rem; border-right: 2px solid var(--primary); padding-right: 10px; background: linear-gradient(to left, rgba(0, 255, 255, 0.1), transparent); animation: pulseText 2s infinite; }
+        .data-label { color: var(--text-color); opacity: 0.7; font-size: 0.7rem; display: block;}
+        .data-value { font-size: 1.1rem; font-weight: bold; text-shadow: 0 0 5px var(--primary); }
+        .website-brand { position: fixed; bottom: 80px; left: 80px; display: flex; flex-direction: column; align-items: flex-start; gap: 15px; z-index: 10; }
+        .logo-container { position: relative; width: 300px; height: 300px; display: flex; justify-content: center; align-items: center; perspective: 800px; }
+        .main-logo { width: 250px; height: 250px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); box-shadow: 0 0 30px var(--primary); position: relative; z-index: 10; }
+        .ring { position: absolute; border-radius: 50%; border: 1px solid var(--primary); box-shadow: 0 0 10px var(--primary); opacity: 0.7; pointer-events: none; }
+        .ring-1 { width: 330px; height: 330px; border-top: 2px solid transparent; border-bottom: 2px solid transparent; animation: spin3D 8s linear infinite; }
+        .ring-2 { width: 290px; height: 290px; border: 1px dashed var(--secondary); animation: spin3D-rev 12s linear infinite; }
+        .ring-3 { width: 380px; height: 380px; border: 1px solid var(--text-color); opacity:0.3; animation: spinFlat 15s linear infinite; }
+        .main-title { margin: 0; color: var(--text-color); font-size: 8rem; line-height: 0.8; letter-spacing: 2px; text-transform: uppercase; font-weight: 800; text-shadow: 0 0 20px var(--secondary); position: relative; z-index: 12; animation: glitch-anim 5s infinite alternate; }
+        .brand-subtitle { font-family: 'Share Tech Mono', monospace; font-size: 1.2rem; color: var(--primary); letter-spacing: 4px; text-transform: uppercase; background: rgba(0, 255, 255, 0.1); padding: 5px 15px; border-left: 3px solid var(--primary); margin-left: 5px; text-shadow: 0 0 10px var(--primary); }
+        
+        .chat-toggle-btn { position: fixed; bottom: 40px; right: 40px; width: 80px; height: 80px; background: var(--glass); border: 2px solid var(--primary); border-radius: 50%; cursor: pointer; color: var(--primary); font-size: 30px; box-shadow: 0 0 20px var(--primary); transition: 0.4s; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .chat-toggle-btn:hover { transform: scale(1.1); box-shadow: 0 0 50px var(--primary); }
+        .chat-toggle-btn::before { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 1px solid var(--secondary); opacity: 0; animation: pulse-ring 2s infinite; }
+        
+        .chat-card { position: fixed; bottom: 140px; right: 40px; width: 380px; height: 600px; background: var(--glass); backdrop-filter: blur(20px); border: 2px solid var(--primary); border-radius: 15px; display: flex; flex-direction: column; transform: translateY(20px); opacity: 0; pointer-events: none; transition: all 0.4s ease; z-index: 999; box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(0, 255, 255, 0.1); overflow: hidden; }
+        .chat-card.active { transform: translateY(0); opacity: 1; pointer-events: all; }
+        .header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; background: rgba(0, 255, 255, 0.05); }
+        .bot-logo-small { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--primary); object-fit: cover; }
+        .header h2 { margin: 0; color: var(--text-color); font-size: 1.2rem; letter-spacing: 1px; font-weight: 600; }
+        .online-badge { font-size: 0.7rem; color: var(--primary); border: 1px solid var(--primary); padding: 2px 8px; border-radius: 4px; }
+        .chat-body { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; background: linear-gradient(to bottom, transparent, rgba(0,255,255,0.02)); }
+        .msg { max-width: 85%; padding: 12px 15px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; position: relative; }
+        .bot { align-self: flex-start; background: rgba(255, 255, 255, 0.1); border-left: 3px solid var(--primary); color: var(--text-color); border: 1px solid rgba(255,255,255,0.1); }
+        .user { align-self: flex-end; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: #fff; text-align: right; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        .footer { padding: 15px; background: rgba(0,0,0,0.3); display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+        #msg-input { flex: 1; background: transparent; border: 1px solid var(--primary); padding: 10px 15px; border-radius: 5px; color: var(--text-color); font-family: 'Share Tech Mono', monospace; transition: 0.3s; }
+        #msg-input:focus { box-shadow: 0 0 10px var(--primary); outline: none; }
+        .send-btn { background: var(--primary); border: none; width: 40px; height: 40px; border-radius: 5px; color: #fff; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .send-btn:hover { background: var(--secondary); box-shadow: 0 0 15px var(--secondary); }
+        .mic-btn { background: transparent; border: 1px solid var(--secondary); width: 40px; height: 40px; border-radius: 5px; color: var(--secondary); cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .mic-btn:hover { background: var(--secondary); color: #fff; box-shadow: 0 0 15px var(--secondary); }
+        .mic-btn.listening { animation: pulse-mic 1s infinite; background: var(--secondary); color: #fff; }
+        @keyframes pulse-mic { 0% { transform: scale(1); } 50% { transform: scale(1.1); box-shadow: 0 0 20px var(--secondary); } 100% { transform: scale(1); } }
+        @keyframes spin3D { 0% { transform: rotateX(60deg) rotateY(0deg) rotateZ(0deg); } 100% { transform: rotateX(60deg) rotateY(360deg) rotateZ(360deg); } }
+        @keyframes spin3D-rev { 0% { transform: rotateX(-60deg) rotateY(0deg); } 100% { transform: rotateX(-60deg) rotateY(-360deg); } }
+        @keyframes spinFlat { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>                                                                                                                                                                   
+    <video autoplay muted loop id="bg-video">
+        <source src="design.mp4.mp4" type="video/mp4">
+    </video>
+    <canvas id="matrix-bg"></canvas>
+    
+    <div id="cursor"></div>
+
+    <div id="login-overlay">
+        
+        <video autoplay muted loop id="security-video">
+            <source src="design.mp4.mp4" type="video/mp4">
+        </video>
+        <div class="security-tint"></div>
+
+        <div class="login-box" id="password-login">
+            <h2 class="login-title">SECURE LOGIN</h2>
+            <div class="input-group">
+                <label>USERNAME</label>
+                <input type="text" id="username" class="login-input" placeholder="admin">
+            </div>
+            <div class="input-group">
+                <label>PASSWORD</label>
+                <input type="password" id="password" class="login-input" placeholder="••••">
+            </div>
+            <button class="login-btn" onclick="attemptLogin()">INITIATE SEQUENCE</button>
+            <div class="error-msg" id="login-error"></div>
+        </div>
+
+        <div id="face-id-container">
+            <h2 class="login-title" style="font-size: 1.5rem; margin-bottom:15px;">BIOMETRIC SCAN</h2>
+            <div style="position:relative;">
+                <video id="face-video" autoplay playsinline muted></video>
+                <div class="face-grid"></div>
+                <div class="scan-overlay">
+                    <div class="scan-bar"></div>
+                </div>
+            </div>
+            <div class="face-status" id="face-status">INITIALIZING CAMERA...</div>
+        </div>
+
+    </div>
+
+    <div id="main-interface">
+        
+        <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()">
+            <i class="fas fa-sun"></i>
+        </button>
+
+        <div class="system-clock">
+            <div class="time-display" id="clock-time">00:00:00</div>
+            <div class="date-display" id="clock-date">LOADING...</div>
+        </div>
+
+        <div class="holo-panel">
+            <div class="data-row"><span class="data-label">SYSTEM</span><span class="data-value">ONLINE</span></div>
+            <div class="data-row"><span class="data-label">CPU</span><span class="data-value">34.8%</span></div>
+            <div class="data-row"><span class="data-label">RAM</span><span class="data-value">64 TB</span></div>
+            <div class="data-row"><span class="data-label">CORE</span><span class="data-value">ACTIVE</span></div>
+        </div>
+
+        <div class="website-brand">
+            <div class="logo-container">
+                <div class="ring ring-1"></div>
+                <div class="ring ring-2"></div>
+                <div class="ring ring-3"></div>
+                <img src="png logo.png" alt="BAQO Main Logo" class="main-logo">
+            </div>
+            <h1 class="main-title">BAQO</h1>
+            <div class="brand-subtitle">BRILLIANT AI QUERY OPTIMIZER</div>
+        </div>
+
+        <button class="chat-toggle-btn" onclick="toggleChat()" style="padding: 0; overflow: hidden;">
+            <img src="png logo.png" alt="Chat" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+        </button>
+
+        <div class="chat-card" id="chat-card">
+            <div class="header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="png logo.png" class="bot-logo-small">
+                    <div>
+                        <h2>BAQO</h2>
+                        <span class="online-badge">● CONNECTED</span>
+                    </div>
+                </div>
+                <i class="fas fa-times" style="color: var(--primary); cursor:pointer;" onclick="toggleChat()"></i>
+            </div>
+
+            <div class="chat-body" id="chat-body"></div>
+
+            <div class="footer">
+                <button class="mic-btn" onclick="startVoiceInput()"><i class="fas fa-microphone"></i></button>
+                <input type="text" id="msg-input" placeholder="> Enter Query...">
+                <button class="send-btn" onclick="sendMsg()"><i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 🔐 LOGIN + FACE ID LOGIC ---
+        let mediaStream = null;
+
+        function attemptLogin() {
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const errorMsg = document.getElementById('login-error');
+            const loginBox = document.getElementById('password-login');
+
+            // HARDCODED CREDENTIALS
+            if(user === "admin" && pass === "baqo") {
+                errorMsg.style.color = "#0f0";
+                errorMsg.innerText = "PASSWORD ACCEPTED.";
+                
+                // Hide Login Box and Start Face ID
+                setTimeout(() => {
+                    loginBox.style.display = 'none';
+                    initFaceID();
+                }, 1000);
+
+            } else {
+                errorMsg.style.color = "#ff3333";
+                errorMsg.innerText = "ACCESS DENIED.";
+                speak("Access Denied.");
+                
+                document.querySelector('.login-box').animate([
+                    { transform: 'translateX(0)' },
+                    { transform: 'translateX(-10px)' },
+                    { transform: 'translateX(10px)' },
+                    { transform: 'translateX(0)' }
+                ], { duration: 300 });
+            }
+        }
+
+        // --- FACE ID FUNCTION ---
+        function initFaceID() {
+            const faceContainer = document.getElementById('face-id-container');
+            const videoEl = document.getElementById('face-video');
+            const statusEl = document.getElementById('face-status');
+            
+            faceContainer.style.display = 'flex'; // Show container
+            speak("Initiating Biometric Scan. Please look at the camera.");
+
+            // Request Camera
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    mediaStream = stream;
+                    videoEl.srcObject = stream;
+                    
+                    statusEl.innerText = "SCANNING FACE...";
+                    statusEl.style.animation = "pulseText 0.5s infinite";
+
+                    // Simulate Scanning Time (3 Seconds)
+                    setTimeout(() => {
+                        statusEl.innerText = "IDENTITY VERIFIED: ADMIN";
+                        statusEl.style.color = "#0f0";
+                        statusEl.style.textShadow = "0 0 10px #0f0";
+                        statusEl.style.animation = "none";
+                        speak("Identity Verified. Welcome Administrator.");
+
+                        // Unlock System
+                        setTimeout(() => {
+                            stopCamera();
+                            document.getElementById('login-overlay').style.opacity = '0';
+                            setTimeout(() => {
+                                document.getElementById('login-overlay').style.display = 'none';
+                                document.getElementById('main-interface').classList.add('unlocked');
+                                startStartupSequence();
+                            }, 800);
+                        }, 1500);
+
+                    }, 3500);
+                })
+                .catch(err => {
+                    console.error("Camera Error:", err);
+                    statusEl.innerText = "CAMERA ERROR. BYPASSING...";
+                    statusEl.style.color = "red";
+                    // Fallback if no camera
+                    setTimeout(() => {
+                        document.getElementById('login-overlay').style.display = 'none';
+                        document.getElementById('main-interface').classList.add('unlocked');
+                        startStartupSequence();
+                    }, 2000);
+                });
+        }
+
+        function stopCamera() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        // --- STARTUP AFTER LOGIN ---
+        function startStartupSequence() {
+            setTimeout(() => { 
+                let welcome = "Welcome to AI Query Optimizer. Systems Online.";
+                typeBotMessage(welcome);
+                speak(welcome); 
+            }, 1000);
+        }
+
+        // --- CURSOR LOGIC ---
+        const cursor = document.getElementById('cursor');
+        document.addEventListener('mousemove', (e) => { cursor.style.left = e.clientX + 'px'; cursor.style.top = e.clientY + 'px'; });
+        const interactiveElements = document.querySelectorAll('button, input');
+        interactiveElements.forEach(el => {
+            el.addEventListener('mouseenter', () => { document.body.classList.add('hovering'); });
+            el.addEventListener('mouseleave', () => { document.body.classList.remove('hovering'); });
+        });
+
+        // --- THEME LOGIC ---
+        function toggleTheme() {
+            const body = document.body;
+            const icon = document.getElementById('theme-toggle').querySelector('i');
+            body.classList.toggle('light-mode');
+            if (body.classList.contains('light-mode')) { icon.classList.remove('fa-sun'); icon.classList.add('fa-moon'); }
+            else { icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); }
+        }
+
+        // --- MATRIX RAIN ---
+        const canvas = document.getElementById('matrix-bg');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        const alphabet = '101010101010101010';
+        const fontSize = 16;
+        const columns = canvas.width/fontSize;
+        const rainDrops = [];
+        for( let x = 0; x < columns; x++ ) { rainDrops[x] = 1; }
+        const draw = () => {
+            const style = getComputedStyle(document.body);
+            ctx.fillStyle = style.getPropertyValue('--matrix-trail').trim() || 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = style.getPropertyValue('--matrix-text').trim() || '#0ff';
+            ctx.font = fontSize + 'px monospace';
+            for(let i = 0; i < rainDrops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                ctx.fillText(text, i*fontSize, rainDrops[i]*fontSize);
+                if(rainDrops[i]*fontSize > canvas.height && Math.random() > 0.975){ rainDrops[i] = 0; }
+                rainDrops[i]++;
+            }
+        };
+        window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+        setInterval(draw, 30);
+
+        // --- CHAT & VOICE ---
+        const chatCard = document.getElementById('chat-card');
+        const chatBody = document.getElementById('chat-body');
+        const msgInput = document.getElementById('msg-input');
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+
+        function startVoiceInput() {
+            const micBtn = document.querySelector('.mic-btn');
+            try { recognition.start(); micBtn.classList.add('listening'); } catch (error) { console.error("Mic error"); }
+        }
+        recognition.onresult = (event) => { msgInput.value = event.results[0][0].transcript; sendMsg(); };
+        recognition.onend = () => { document.querySelector('.mic-btn').classList.remove('listening'); };
+
+        function speak(text) {
+            const synth = window.speechSynthesis;
+            if (text !== '') {
+                const utterThis = new SpeechSynthesisUtterance(text);
+                utterThis.rate = 1; utterThis.pitch = 0.8;
+                synth.speak(utterThis);
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock-time').innerText = now.toLocaleTimeString('en-US', { hour12: false });
+            document.getElementById('clock-date').innerText = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+        }
+        setInterval(updateClock, 1000); updateClock();
+
+        function toggleChat() { chatCard.classList.toggle('active'); }
+        msgInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMsg(); });
+
+
+        // --- 🔗 C# API INTEGRATION (GREETING + MATH + SUMMARIZE) ---
+        
+        // 🚦 PORTS CONFIGURATION
+        const GREETING_API = `https://localhost:7290/api/Greeting/getanswer`;
+        const MATH_API = `https://localhost:7217/api/Maths`; 
+        // 👇 NEW SUMMARIZE API ADDED HERE
+        const SUMMARY_API = `https://localhost:7166/api/Code/summarize`;
+        const QUIZ_API = 'https://localhost:7284/api/mathquiz/new';
+        let activeQuizAnswer = null;
+        const SEARCH_API = `https://localhost:7023/api/Search/run`;
+        
+
+        async function sendMsg() {
+            let text = msgInput.value.trim();
+            if (!text) return;
+
+            // 1. Show User Message
+            addMsg(text, 'user');
+            msgInput.value = '';
+
+            // --- 🚦 TRAFFIC POLICE LOGIC 🚦 ---
+            
+            // Case 1: TRIGONOMETRY (sin, cos, tan)
+            if (text.startsWith("sin") || text.startsWith("cos") || text.startsWith("tan")) {
+                let parts = text.split(" "); 
+                if (parts.length === 2) {
+                    callMathApi(`${MATH_API}/trig?op=${parts[0]}&angle=${parts[1]}`);
+                    return;
+                }
+            }
+            
+
+            // ---------------------------------------------------------
+    // 🎮 FIXED MATH QUIZ LOGIC (Correct Order)
+    // ---------------------------------------------------------
+
+    // PRIORITY 1: START / RESTART GAME (Sabse pehle ye check karo)
+    if (text.toLowerCase().trim() === "quiz") {
+        activeQuizAnswer = null; // Purana sawal cancel
+        isSelectingLevel = true; // Ab level poochna shuru
+        addMsg("Which level do you want? <br> (Type: <b>Easy</b>, <b>Medium</b>, or <b>Hard</b>)", 'bot');
+        return;
+    }
+
+    // PRIORITY 2: LEVEL SELECTION (Agar user level bata raha hai)
+    else if (isSelectingLevel === true) {
+        let choice = text.toLowerCase().trim();
+        
+        if (choice === "easy" || choice === "medium" || choice === "hard") {
+            addMsg(`🎲 Generating ${choice} question...`, 'bot');
+            
+            try {
+                const response = await fetch(QUIZ_API + "?choice=" + choice);
+                const data = await response.json();
+                
+                addMsg(`❓ <b>Math Quiz (${data.level}):</b><br>Solve: ${data.question}`, 'bot');
+                activeQuizAnswer = data.answer;
+                isSelectingLevel = false; // Selection khatam
+            } catch (error) {
+                addMsg("⚠️ Error: Backend API issue.", 'bot');
+            }
+        } else {
+            addMsg("⚠️ Please type: <b>Easy</b>, <b>Medium</b>, or <b>Hard</b>", 'bot');
+        }
+        return;
+    }
+
+    // PRIORITY 3: CHECK ANSWER (Agar upar ki dono baatein nahi hain, to ye jawab hoga)
+    else if (activeQuizAnswer !== null) {
+        let userAnswer = parseInt(text.trim());
+        
+        if (isNaN(userAnswer)) {
+            addMsg("🔢 Number likho bhai! (Please enter a number)", 'bot'); 
+            return;
+        }
+
+        if (userAnswer === activeQuizAnswer) {
+            addMsg("🎉 Bravo! Correct Answer. 🏆", 'bot');
+        } else {
+            addMsg(`❌ Wrong! Correct answer is: ${activeQuizAnswer}`, 'bot');
+        }
+        
+        activeQuizAnswer = null; // Quiz khatam
+        return;
+    }
+
+            // Case 2: FACTORIAL
+            else if (text.startsWith("factorial")) {
+                let parts = text.split(" ");
+                if (parts.length === 2) {
+                    callMathApi(`${MATH_API}/factorial?num=${parts[1]}`);
+                    return;
+                }
+            }
+
+            // Case 3: ADVANCED MATH (square, cube, sqrt)
+            else if (text.startsWith("square") || text.startsWith("cube") || text.startsWith("sqrt")) {
+                let parts = text.split(" ");
+                if (parts.length === 2) {
+                    callMathApi(`${MATH_API}/calc?op=${parts[0]}&num=${parts[1]}`);
+                    return;
+                }
+            } 
+            
+            // Case 4: BASIC MATH (calc add 10 20)
+            else if (text.startsWith("calc")) {
+                let parts = text.split(" ");
+                if (parts.length === 4) {
+                    callMathApi(`${MATH_API}/basic?op=${parts[1]}&a=${parts[2]}&b=${parts[3]}`);
+                    return;
+                } else {
+                    typeBotMessage("Usage: 'calc add 10 20'");
+                    return;
+                }
+            }
+
+            // 👇 Case 5: NEW SUMMARIZE API LOGIC 👇
+            else if (text.toLowerCase().startsWith("summarize")) {
+                // Remove "summarize " from start
+                let content = text.substring(9).trim();
+                if(content.length < 5) {
+                    typeBotMessage("Please provide more text to summarize.");
+                    return;
+                }
+                callSummarizeApi(content);
+                return;
+            }
+
+            // Case 6: GREETING API (Default)
+            else {
+                callGreetingApi(text);
+            }
+        } 
+
+        // --- API HELPER FUNCTIONS ---
+
+        // 1. Greeting Helper
+        async function callGreetingApi(userText) {
+            try {
+                const response = await fetch(`${GREETING_API}?message=${encodeURIComponent(userText)}`);
+                const data = await response.json();
+                if (data.reply) {
+                    typeBotMessage(data.reply);
+                    speak(data.reply);
+                }
+            } catch (error) {
+                console.error("Greeting Error:", error);
+                typeBotMessage("Connection Failed (Check Greeting API Port 7290)"); 
+            }
+        }
+
+        // 2. Math Helper
+        async function callMathApi(url) {
+            try {
+                const response = await fetch(url);
+                // Assuming Math API returns simple text or JSON with 'result'
+                const data = await response.json(); // Adjust if API returns plain text
+                const output = data.result || data.answer || JSON.stringify(data);
+                typeBotMessage("CALCULATION: " + output);
+                speak("The result is " + output);
+            } catch (error) {
+                console.error("Math API Error:", error);
+                typeBotMessage("Math Connection Failed (Check Port 7217)");
+            }
+        }
+
+        // 3. Summarize Helper (NEW)
+        async function callSummarizeApi(textToSummarize) {
+            typeBotMessage("Scanning text for key points..."); // UI Feedback
+
+            try {
+                const response = await fetch(SUMMARY_API, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        text: textToSummarize,
+                        maxSentences: 1,       // <--- YE LINE LIKHEIN (Comma lagana mat bhoolna)
+                        action: "summarize"
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Matches C# response: { status: "Summarized", summary: "..." }
+                if (data.summary) {
+                    typeBotMessage("📝 SUMMARY: " + data.summary);
+                    speak("Summary generated successfully.");
+                } else {
+                    typeBotMessage("Could not generate summary.");
+                }
+
+            } catch (error) {
+                console.error("Summary API Error:", error);
+                typeBotMessage("Connection Failed. Check if API is running on Port 7166.");
+            }
+        }
+
+        // --- UI HELPER FUNCTIONS ---
+
+        function addMsg(text, sender) {
+            const div = document.createElement('div');
+            div.classList.add('msg', sender);
+            div.innerText = text;
+            chatBody.appendChild(div);
+            chatBody.scrollTop = chatBody.scrollHeight; // Auto scroll to bottom
+        }
+
+        function typeBotMessage(text) {
+            addMsg(text, 'bot');
+        }
+
+    </script>
+</body>
+</html>
